@@ -35,17 +35,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
-You can set environment variables in your shell or add them at the top of `app.py` as shown below:
-
-```python
-import os
-os.environ["GEMINI_API_KEY"] = 'your_actual_gemini_api_key_here'
-```
-
 **Required variables:**
-- `GEMINI_API_KEY` (your Gemini 1.5 Flash API key)
-- `FLASK_SECRET_KEY` (any random string for Flask sessions)
 - `FLASK_ENV` (usually `development`)
 - `N8N_WEBHOOK_URL` (optional, for n8n integration)
 - `MAX_FILE_SIZE` (default: 10485760)
