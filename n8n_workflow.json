@@ -1,0 +1,231 @@
+{
+  "name": "Fake Letter Detection Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fake-letter-detection",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "fake-letter-detection"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract data from webhook\nconst { filename, content, analysis, timestamp } = $input.first().json;\n\n// Log the incoming data\nconsole.log('Received letter analysis:', {\n  filename,\n  contentLength: content?.length || 0,\n  authenticityScore: analysis?.authenticity_score,\n  riskLevel: analysis?.risk_assessment,\n  timestamp\n});\n\n// Add metadata\nconst enrichedData = {\n  ...$input.first().json,\n  workflow_processed: true,\n  processed_at: new Date().toISOString(),\n  workflow_version: '1.0'\n};\n\nreturn enrichedData;"
+      },
+      "id": "data-processor",
+      "name": "Data Processor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "risk-check",
+              "leftValue": "={{ $json.analysis.risk_assessment }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "risk-filter",
+      "name": "Risk Filter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "create",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "🚨 **HIGH RISK LETTER DETECTED** 🚨\n\n📄 **File:** {{ $json.filename }}\n🎯 **Risk Level:** {{ $json.analysis.risk_assessment }}\n📊 **Authenticity Score:** {{ $json.analysis.authenticity_score }}/100\n\n⚠️ **Red Flags:**\n{{ $json.analysis.red_flags.map(flag => `• ${flag.description} (${flag.severity})`).join('\\n') }}\n\n📝 **Summary:** {{ $json.analysis.summary }}\n\n⏰ **Detected:** {{ $json.processed_at }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-alert",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "create",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "✅ **Letter Analysis Complete** ✅\n\n📄 **File:** {{ $json.filename }}\n🎯 **Risk Level:** {{ $json.analysis.risk_assessment }}\n📊 **Authenticity Score:** {{ $json.analysis.authenticity_score }}/100\n\n📝 **Summary:** {{ $json.analysis.summary }}\n\n⏰ **Processed:** {{ $json.processed_at }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-notification",
+      "name": "Telegram Notification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "collection": "letter_analyses",
+        "documentId": "={{ $json.filename.replace(/[^a-zA-Z0-9]/g, '_') + '_' + Date.now() }}",
+        "dataToSend": "={{ { filename: $json.filename, content: $json.content, analysis: $json.analysis, timestamp: $json.timestamp, processed_at: $json.processed_at, workflow_version: $json.workflow_version } }}"
+      },
+      "id": "database-store",
+      "name": "Store in Database",
+      "type": "n8n-nodes-base.firestore",
+      "typeVersion": 1,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: 'Letter analysis processed successfully', data: { filename: $json.filename, risk_level: $json.analysis.risk_assessment, authenticity_score: $json.analysis.authenticity_score } } }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "email": "admin@yourcompany.com",
+        "subject": "🚨 High Risk Letter Detected - {{ $json.filename }}",
+        "text": "A high-risk letter has been detected by the AI system.\n\nDetails:\n- Filename: {{ $json.filename }}\n- Risk Level: {{ $json.analysis.risk_assessment }}\n- Authenticity Score: {{ $json.analysis.authenticity_score }}/100\n\nRed Flags:\n{{ $json.analysis.red_flags.map(flag => '- ' + flag.description).join('\\n') }}\n\nSummary: {{ $json.analysis.summary }}\n\nPlease review this letter manually.",
+        "options": {}
+      },
+      "id": "email-alert",
+      "name": "Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [900, 100]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Data Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Processor": {
+      "main": [
+        [
+          {
+            "node": "Risk Filter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store in Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Filter": {
+      "main": [
+        [
+          {
+            "node": "Email Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Alert": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Notification": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store in Database": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "fake-letter-detection-workflow",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "fake-letter-detection",
+      "name": "Fake Letter Detection"
+    }
+  ]
+} 

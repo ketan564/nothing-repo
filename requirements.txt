@@ -1,0 +1,12 @@
+flask
+google-generativeai
+python-dotenv
+requests
+PyPDF2
+python-docx
+Pillow
+numpy
+pandas
+scikit-learn
+nltk
+textblob
